@@ -39,18 +39,41 @@ def netsh_info_to_val(msg):
 
 class net_rating:
   def __init__(self, strength):
-    self.num_fails = 0
     self.strength = strength
+    self.connection_consistency = 0
+    self.num_fails = 0
     log(f" - new net rating, initial strength: {strength}")
 
   def update_strength(self, strength):
     self.strength = strength
     log(f" - updating net rating's strength: {strength}")
-    
+
+  def register_connection_consistency(self):
+    self.connection_consistency += 1
+    log(f" - updated net rating's connection consistency: {self.connection_consistency}")
+
   def register_fail(self):
     self.num_fails += 1
     log(f" - updated net rating's num fails: {self.num_fails}")
 
+  def get_score(self):
+
+    if self.num_fails > 0:
+      score = self.connection_consistency / self.num_fails
+    else:
+      score = self.connection_consistency #shouldn't ever happen
+      
+    log(f" - strength:               {self.strength}")
+    log(f" - connection consistency: {self.connection_consistency}")
+    log(f" - num fails:              {self.num_fails}")
+    log(f" - score:                  {score}")
+
+    return score
+  
+    # todo: factor in signal strength
+    # todo: factor in times when we weren't online yet we were connected to the network
+    # todo: handle times when there is no network to choose from
+  
     
 
 # returns strength int
@@ -93,14 +116,24 @@ class net_ratings_mgr:
     else:
       log(f"adding net rating for {net_id}")
       self.net_ratings.update({net_id : net_rating(self.current_strength())})
-  
+
+  def register_connection_consistency(self, net_id):
+    if net_id in self.net_ratings:
+      log(f"registering connection consistency in net rating for {net_id}")
+      self.net_ratings[net_id].register_connection_consistency()
+    else:
+      log(f"adding net rating for {net_id} to register connection consistency")
+      log("  error - net rating should already exist before registering connection consistency")
+      self.net_ratings.update({net_id : net_rating(self.current_strength())})
+      self.net_ratings[net_id].register_connection_consistency()
+      
   def register_fail(self, net_id):
     if net_id in self.net_ratings:
-      log(f"updaing net rating for {net_id}")
+      log(f"registering fail in net rating for {net_id}")
       self.net_ratings[net_id].register_fail()
     else:
-      log(f"adding net rating for {net_id}")
-      log("error - a net should have been found for registering a fail")
+      log(f"adding net rating for {net_id} to register fail")
+      log("  error - net rating should already exist before registering a fail")
       self.net_ratings.update({net_id : net_rating(self.current_strength())})
       self.net_ratings[net_id].register_fail()
   
@@ -113,19 +146,17 @@ class net_ratings_mgr:
 
     #2. try network which has had the fewest fails:
     best_net_id = None
-    fewest_fails = None
+    best_score = None
     for net_id in valid_net_ids:
       if net_id in self.net_ratings:
-        if (best_net_id == None) or (self.net_ratings[net_id].num_fails < fewest_fails):
+        log(f"getting score for net rating: {net_id}")
+        this_score = self.net_ratings[net_id].get_score()
+        if (best_net_id == None) or (this_score > best_score):
           best_net_id = net_id
-          fewest_fails = self.net_ratings[net_id].num_fails
+          best_score = this_score
 
     if best_net_id:
       return best_net_id
-        
-    # todo: factor in signal strength
-    # todo: factor in times when we weren't online yet we were connected to the network
-    # todo: handle times when there is no network to choose from
     
 
     
@@ -227,7 +258,7 @@ class reconnecter:
 
   def public_loop(self):
     if self.am_i_online():
-      pass
+      self.net_ratings.register_connection_consistency(self.current_net_id)
     else:
       print('\a')
       if self.current_net_id != "":
