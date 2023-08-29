@@ -28,11 +28,11 @@ def run_proc(cmd):
   p_out, p_err = p.communicate()
   return str(p_out)
 
-# parses command output for netsh commands - NOT batch file's echo output
+# parses command output for netsh commands - NOT for batch file's echo output
 def parse_cmd_output(msg):
   return msg.split("\\r\\n")
 
-def netsh_info_to_net_id(msg):
+def netsh_info_to_val(msg):
   return msg.split(":")[1].strip()
 
 
@@ -59,14 +59,14 @@ class net_ratings_mgr:
     self.net_ratings = { }
 
   def current_strength(self):
-    inters_res = run_proc("netsh wlan show interfaces")
-    inters_res = parse_cmd_output(inters_res)
+    interfaces_res = run_proc("netsh wlan show interfaces")
+    interfaces_res = parse_cmd_output(interfaces_res)
 
     signal_strs = list()
 
-    for line in inters_res:
+    for line in interfaces_res:
       if "Signal" in line:
-        signal_str = netsh_info_to_net_id(line)
+        signal_str = netsh_info_to_val(line)
         signal_strs.append(signal_str)
 
     if len(signal_strs) == 1:
@@ -75,6 +75,10 @@ class net_ratings_mgr:
       return strength
     else:
       log("error - multiple signal strength values found")
+      log("  result of show interfaces cmd:") 
+      for line in interfaces_res:
+        log(line)
+        
       return -1
 
   def update_strength(self, net_id):
@@ -111,8 +115,8 @@ class net_ratings_mgr:
           best_net_id = net_id
           fewest_fails = self.net_ratings[net_id].num_fails
 
-          
-    return best_net_id
+    if best_net_id:
+      return best_net_id
         
     # todo: factor in signal strength
 
@@ -135,7 +139,7 @@ class reconnecter:
   def __init__(self):
     self.current_net_id = ""
     self.net_ratings = net_ratings_mgr()
-    self.profiles = list()
+    self.net_profiles = list()
     
     #getting network profiles on this computer:
     profiles_res = run_proc("netsh wlan show profile")
@@ -144,14 +148,14 @@ class reconnecter:
     
     for line in profiles_res:
       if ":" in line:
-        profile = netsh_info_to_net_id(line)
-        self.profiles.append(profile)
+        profile = netsh_info_to_val(line)
+        self.net_profiles.append(profile)
     
-    log(f"network profiles found: {self.profiles}")
+    log(f"network profiles found: {self.net_profiles}")
 
     
-    #what is current network connection?:
-    if self.am_i_connected():
+    #what is current network connection on startup?:
+    if self.am_i_on_wifi():
       self.update_current_net_id()
       log(f"on startup, connected to: {self.current_net_id}")
       self.net_ratings.update_strength(self.current_net_id)
@@ -159,20 +163,29 @@ class reconnecter:
       log("not connected to a network on startup")
       
   #bool
-  def am_i_connected(self):
-    connected_res = run_proc("amIConnected.bat")
+  def am_i_online(self):
+    connected_res = run_proc("amIOnline.bat")
     parsed_1 = connected_res.split("'")[1]
     parsed_2 = parsed_1.split("\\")[0]
     p_res = parsed_2.strip()
 
     log(p_res)
 
-    if p_res == "connected":
+    if p_res == "online":
       return True
-    elif p_res == "not connected":
+    elif p_res == "not online":
       return False
 
     return False
+
+  def am_i_on_wifi(self):
+    interfaces_res = run_proc("netsh wlan show interfaces")
+    interfaces_res = parse_cmd_output(interfaces_res)
+    for line in interfaces_res:
+      if "Signal" in line:
+        return True
+    return False
+    
 
   def update_current_net_id(self):
     interfaces_res = run_proc("netsh wlan show interfaces")
@@ -182,7 +195,7 @@ class reconnecter:
     
     for line in interfaces_res:
       if "SSID" in line:
-        net_id = netsh_info_to_net_id(line)
+        net_id = netsh_info_to_val(line)
         net_ids.append(net_id)
         
     if len(net_ids) >= 1:
@@ -197,10 +210,10 @@ class reconnecter:
 
     for line in nets_res:
       if "SSID" in line:
-        net_id = netsh_info_to_net_id(line)
+        net_id = netsh_info_to_val(line)
         net_ids.append(net_id)
 
-    valid_net_ids = [id for id in net_ids if id in self.profiles]
+    valid_net_ids = [id for id in net_ids if id in self.net_profiles]
 
     log(f"valid network ids: {valid_net_ids}")
 
@@ -212,12 +225,16 @@ class reconnecter:
 
 
   def public_loop(self):
-    if self.am_i_connected():
+    if self.am_i_online():
       pass
     else:
       print('\a')
       if self.current_net_id != "":
         self.net_ratings.register_fail(self.current_net_id)
+
+      if self.am_i_on_wifi():
+        run_proc("netsh wlan disconnect")
+        
       self.reconnect()
       self.update_current_net_id()
       self.net_ratings.update_strength(self.current_net_id)
