@@ -37,7 +37,6 @@ def netsh_info_to_val(msg):
 
 
 
-
 class net_rating:
   def __init__(self, strength):
     self.num_fails = 0
@@ -52,6 +51,7 @@ class net_rating:
     self.num_fails += 1
     log(f" - updated net rating's num fails: {self.num_fails}")
 
+    
 
 # returns strength int
 class net_ratings_mgr:
@@ -73,17 +73,22 @@ class net_ratings_mgr:
       strength = signal_strs[0].strip("%")
       strength = int(strength)
       return strength
+    elif len(signal_strs) == 0:
+      log("error - tried to find signal strength when not connected")
+      log("  result of show interfaces cmd:") 
+      for line in interfaces_res:
+        log(line)
+      return -1
     else:
       log("error - multiple signal strength values found")
       log("  result of show interfaces cmd:") 
       for line in interfaces_res:
         log(line)
-        
       return -1
 
   def update_strength(self, net_id):
     if net_id in self.net_ratings:
-      log(f"updaing net rating for {net_id}")
+      log(f"updating net rating for {net_id}")
       self.net_ratings[net_id].update_strength(self.current_strength())
     else:
       log(f"adding net rating for {net_id}")
@@ -119,22 +124,11 @@ class net_ratings_mgr:
       return best_net_id
         
     # todo: factor in signal strength
+    # todo: factor in times when we weren't online yet we were connected to the network
+    # todo: handle times when there is no network to choose from
+    
 
-
-
-
-
-
-
-
-
-
-
-   
-
-
-
-
+    
 class reconnecter:
   def __init__(self):
     self.current_net_id = ""
@@ -187,7 +181,12 @@ class reconnecter:
     return False
     
 
-  def update_current_net_id(self):
+  def update_current_net_id(self, given_net_id = None):
+
+    if given_net_id:
+      self.current_net_id = given_net_id
+      return
+    
     interfaces_res = run_proc("netsh wlan show interfaces")
     interfaces_res = parse_cmd_output(interfaces_res)
 
@@ -223,6 +222,8 @@ class reconnecter:
     connect_res = run_proc(connect_cmd)
     log(connect_res)
 
+    return best_net_id
+
 
   def public_loop(self):
     if self.am_i_online():
@@ -235,9 +236,14 @@ class reconnecter:
       if self.am_i_on_wifi():
         run_proc("netsh wlan disconnect")
         
-      self.reconnect()
-      self.update_current_net_id()
-      self.net_ratings.update_strength(self.current_net_id)
+      net_id = self.reconnect()
+      sleep(1)
+      
+      self.update_current_net_id(net_id)
+      if self.am_i_on_wifi():
+        self.net_ratings.update_strength(self.current_net_id)
+      else:
+        log("error - just reconnected but not on wifi")
 
   
 
