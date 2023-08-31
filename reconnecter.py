@@ -2,16 +2,21 @@ from subprocess import Popen
 import subprocess
 from time import sleep
 import datetime
+import os
+import winsound
 
 VERBOSE = True
 
 #logging:
-log_file_name = "reconnecter" + str(datetime.datetime.now()) + ".log"
-log_file_name = log_file_name.replace(" ", "-")
-log_file_name = log_file_name.replace(":", "-")
+if not os.path.exists('./log'):
+  os.mkdir('log')
+  
+log_file_path = "./log/reconnecter" + str(datetime.datetime.now()) + ".log"
+log_file_path = log_file_path.replace(" ", "-")
+log_file_path = log_file_path.replace(":", "-")
 
 def log(msg):
-  with open(log_file_name, "a") as log_f:
+  with open(log_file_path, "a") as log_f:
     now_str = str(datetime.datetime.now())
     log_str = f"{now_str}: {msg}"
     log_f.write(log_str)
@@ -40,7 +45,7 @@ def netsh_info_to_val(msg):
 class net_rating:
   def __init__(self, strength):
     self.strength = strength
-    self.connection_consistency = 0
+    self.connected_time = 0
     self.num_fails = 0
     log(f" - new net rating, initial strength: {strength}")
 
@@ -48,31 +53,30 @@ class net_rating:
     self.strength = strength
     log(f" - updating net rating's strength: {strength}")
 
-  def register_connection_consistency(self):
-    self.connection_consistency += 1
-    log(f" - updated net rating's connection consistency: {self.connection_consistency}")
+  def register_connected_time(self):
+    self.connected_time += 1
+    log(f" - updated net rating's connected time: {self.connected_time}")
 
   def register_fail(self):
     self.num_fails += 1
     log(f" - updated net rating's num fails: {self.num_fails}")
 
   def get_score(self):
-
     if self.num_fails > 0:
-      score = self.connection_consistency / self.num_fails
+      score = self.connected_time / self.num_fails
     else:
-      score = self.connection_consistency #shouldn't ever happen
+      score = self.connected_time #shouldn't ever happen
       
-    log(f" - strength:               {self.strength}")
-    log(f" - connection consistency: {self.connection_consistency}")
-    log(f" - num fails:              {self.num_fails}")
-    log(f" - score:                  {score}")
+    log(f" - strength:       {self.strength}")
+    log(f" - connected time: {self.connected_time}")
+    log(f" - num fails:      {self.num_fails}")
+    log(f" - score:          {score}")
 
     return score
   
     # todo: factor in signal strength
-    # todo: factor in times when we weren't online yet we were connected to the network
     # todo: handle times when there is no network to choose from
+    # coulddo: factor in times when we weren't online yet we were connected to the network
   
     
 
@@ -117,15 +121,15 @@ class net_ratings_mgr:
       log(f"adding net rating for {net_id}")
       self.net_ratings.update({net_id : net_rating(self.current_strength())})
 
-  def register_connection_consistency(self, net_id):
+  def register_connected_time(self, net_id):
     if net_id in self.net_ratings:
-      log(f"registering connection consistency in net rating for {net_id}")
-      self.net_ratings[net_id].register_connection_consistency()
+      log(f"registering connected time in net rating for {net_id}")
+      self.net_ratings[net_id].register_connected_time()
     else:
-      log(f"adding net rating for {net_id} to register connection consistency")
-      log("  error - net rating should already exist before registering connection consistency")
+      log(f"adding net rating for {net_id} to register connected time")
+      log("  error - net rating should already exist before registering connected time")
       self.net_ratings.update({net_id : net_rating(self.current_strength())})
-      self.net_ratings[net_id].register_connection_consistency()
+      self.net_ratings[net_id].register_connected_time()
       
   def register_fail(self, net_id):
     if net_id in self.net_ratings:
@@ -258,9 +262,11 @@ class reconnecter:
 
   def public_loop(self):
     if self.am_i_online():
-      self.net_ratings.register_connection_consistency(self.current_net_id)
+      self.net_ratings.register_connected_time(self.current_net_id)
     else:
-      print('\a')
+      #print('\a')
+      winsound.PlaySound('./sfx/disconnected.wav', winsound.SND_FILENAME)
+      
       if self.current_net_id != "":
         self.net_ratings.register_fail(self.current_net_id)
 
@@ -276,6 +282,10 @@ class reconnecter:
       else:
         log("error - just reconnected but not on wifi")
 
+      if self.am_i_online():
+        winsound.PlaySound('./sfx/connected.wav', winsound.SND_FILENAME)
+      else:
+        log("error - just reconnected but not online")
   
 
 #main code:
