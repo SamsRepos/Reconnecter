@@ -190,6 +190,13 @@ class reconnecter:
       self.net_ratings.update_strength(self.current_net_id)
     else:
       log("not connected to a network on startup")
+
+    if self.am_i_online():
+      self.previously_online = True
+      log("online on startup")
+    else:
+      self.previously_online = False
+      log("not online on startup")
       
   #bool
   def am_i_online(self):
@@ -262,10 +269,15 @@ class reconnecter:
 
   def public_loop(self):
     if self.am_i_online():
+      if self.previously_online == False:
+        winsound.PlaySound('./sfx/connected.wav', winsound.SND_FILENAME)
+      
       self.net_ratings.register_connected_time(self.current_net_id)
+
+      self.previously_online = True
     else:
-      #print('\a')
-      winsound.PlaySound('./sfx/disconnected.wav', winsound.SND_FILENAME)
+      print('\a')
+      #winsound.PlaySound('./sfx/disconnected.wav', winsound.SND_FILENAME)
       
       if self.current_net_id != "":
         self.net_ratings.register_fail(self.current_net_id)
@@ -282,10 +294,10 @@ class reconnecter:
       else:
         log("error - just reconnected but not on wifi")
 
-      if self.am_i_online():
-        winsound.PlaySound('./sfx/connected.wav', winsound.SND_FILENAME)
-      else:
+      if not self.am_i_online():
         log("error - just reconnected but not online")
+
+      self.previously_online = False
   
 
 #main code:
