@@ -62,7 +62,9 @@ class net_rating:
     log(f" - updated net rating's num fails: {self.num_fails}")
 
   def get_score(self):
-    if self.num_fails > 0:
+    if self.connected_time == 0:
+      score = self.num_fails * -1 
+    elif self.num_fails > 0:
       score = self.connected_time / self.num_fails
     else:
       score = self.connected_time #shouldn't ever happen
