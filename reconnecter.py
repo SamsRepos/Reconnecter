@@ -4,9 +4,20 @@ from time import sleep
 import datetime
 import os
 import winsound
+from sys import argv
 
-VERBOSE = True
+AUDIBLE = False
+VERBOSE = False
 
+if len(argv) > 0:
+  for i in range(len(argv)):
+    match argv[i]:
+      case("-a"):
+        AUDIBLE = True
+      case("-v"):
+        VERBOSE = True
+
+        
 #logging:
 if not os.path.exists('./log'):
   os.mkdir('log')
@@ -272,14 +283,16 @@ class reconnecter:
   def public_loop(self):
     if self.am_i_online():
       if self.previously_online == False:
-        winsound.PlaySound('./sfx/connected.wav', winsound.SND_FILENAME)
+        if AUDIBLE:
+          winsound.PlaySound('./sfx/connected.wav', winsound.SND_FILENAME)
       
       self.net_ratings.register_connected_time(self.current_net_id)
 
       self.previously_online = True
     else:
-      print('\a')
-      #winsound.PlaySound('./sfx/disconnected.wav', winsound.SND_FILENAME)
+      if AUDIBLE:
+        print('\a')
+        #winsound.PlaySound('./sfx/disconnected.wav', winsound.SND_FILENAME)
       
       if self.current_net_id != "":
         self.net_ratings.register_fail(self.current_net_id)
