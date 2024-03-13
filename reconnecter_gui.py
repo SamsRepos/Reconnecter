@@ -9,13 +9,10 @@ from sys import argv
 import wx
 import threading
 
+from reconnecter_result import reconnecter_result
+
 AUDIBLE = False
 VERBOSE = False
-GUI     = False
-
-
-
-
 
 if len(argv) > 0:
   for i in range(len(argv)):
@@ -24,8 +21,6 @@ if len(argv) > 0:
         AUDIBLE = True
       case("-v"):
         VERBOSE = True
-      case("-g"):
-        GUI = True
 
         
 #logging:
@@ -334,7 +329,7 @@ class reconnecter:
 
       self.previously_online = False
 
-    return flush_logged_messages()
+    return reconnecter_result(connected=self.am_i_on_wifi(), online=self.am_i_online())
   
 
 
@@ -347,30 +342,40 @@ class MainFrame(wx.Frame):
   def __init__(self, parent):
     wx.Frame.__init__(self, parent, title="Reconnecter")
 
-    panel = wx.Panel(self)
-    self.label = wx.StaticText(panel, label="Ready")
-    self.btn = wx.Button(panel, label="start")
+    self.panel = wx.Panel(self)
+    self.status_label = wx.StaticText(self.panel)
+    self.connected_label = wx.StaticText(self.panel)
+    self.online_label = wx.StaticText(self.panel)
+    self.start_btn = wx.Button(self.panel, label="start")
 
     sizer = wx.BoxSizer(wx.VERTICAL)
-    sizer.Add(self.label)
-    sizer.Add(self.btn)
+    sizer.Add(self.status_label)
+    sizer.Add(self.connected_label)
+    sizer.Add(self.online_label)
 
-    panel.SetSizerAndFit(sizer)
+    button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+    button_sizer.Add(self.start_btn)
+    sizer.Add(button_sizer)
+
+    self.panel.SetSizerAndFit(sizer)
     self.Bind(wx.EVT_BUTTON, self.Start)
 
   def Start(self, event):
-    self.btn.Enable(False)
-    self.label.SetLabel("Running")
+    self.start_btn.Enable(False)
+    self.start_btn.Destroy()
+
+    self.status_label.SetLabel("Running")
 
     thread = threading.Thread(target=self.main_loop)
     thread.start()
 
   def main_loop(self):
-    r = reconnecter()
+    r = reconnecter()    
     while True:
-      msgs = r.public_loop()
-      for msg in msgs:
-        wx.CallAfter(self.label.SetLabelText, msg)
+      result = r.public_loop()
+      wx.CallAfter(self.status_label.SetLabelText,    f"Last update: {str(result.datetime)}")
+      wx.CallAfter(self.connected_label.SetLabelText, f"Connected: {str(result.connected)}")
+      wx.CallAfter(self.online_label.SetLabelText,    f"Online: {str(result.online)}")
       sleep(3)
 
 if __name__ == '__main__':
