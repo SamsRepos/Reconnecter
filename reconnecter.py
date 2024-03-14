@@ -1,10 +1,24 @@
 from subprocess import Popen
 import subprocess
 from time import sleep
-import datetime
+from datetime import datetime
 import os
 import winsound
 from sys import argv
+
+def seconds_to_hours(secs):
+    mm, ss = divmod(secs, 60)
+    hh, mm = divmod(mm, 60)
+    return "%d:%02d:%02d" % (hh, mm, ss)
+
+
+class reconnecter_result:
+    def __init__(self, connected, online, current_net_id, net_ratings):
+        self.datetime       = datetime.now()
+        self.connected      = connected
+        self.online         = online
+        self.current_net_id = current_net_id
+        self.net_ratings    = net_ratings
 
 AUDIBLE = False
 VERBOSE = False
@@ -22,21 +36,36 @@ if len(argv) > 0:
 if not os.path.exists('./log'):
   os.mkdir('log')
   
-log_file_path = "./log/reconnecter" + str(datetime.datetime.now()) + ".log"
+log_file_path = "./log/reconnecter" + str(datetime.now()) + ".log"
 log_file_path = log_file_path.replace(" ", "-")
 log_file_path = log_file_path.replace(":", "-")
 
+SECONDS_BETWEEN_PINGS = 3
+MAX_RETAINED_MESSAGES = 15
+
+class retained_log_messages:
+  
+  def __init__(self):
+    self.messages = []
+  
+  def add_message(self, message):
+    self.messages.append(message)
+    while len(self.messages) > MAX_RETAINED_MESSAGES :
+      self.messages.pop(0)
+
+retained_log_messages = retained_log_messages()
+
 def log(msg):
   with open(log_file_path, "a") as log_f:
-    now_str = str(datetime.datetime.now())
+    now_str = str(datetime.now())
     log_str = f"{now_str}: {msg}"
     log_f.write(log_str)
     log_f.write('\n\n')
 
     if VERBOSE:
-      print(log_str)
+      retained_log_messages.add_message(msg)
 
-
+clear = lambda: os.system('cls')
       
 #util functions:
 def run_proc(cmd):
@@ -56,7 +85,8 @@ def netsh_info_to_val(msg):
 class net_rating:
   def __init__(self, strength):
     self.strength = strength
-    self.connected_time = 0
+    self.connected_time_since_startup = 0
+    self.connected_time_since_reconnect = 0
     self.num_fails = 0
     log(f" - new net rating, initial strength: {strength}")
 
@@ -65,25 +95,30 @@ class net_rating:
     log(f" - updating net rating's strength: {strength}")
 
   def register_connected_time(self):
-    self.connected_time += 1
-    log(f" - updated net rating's connected time: {self.connected_time}")
+    self.connected_time_since_startup += SECONDS_BETWEEN_PINGS
+    self.connected_time_since_reconnect += SECONDS_BETWEEN_PINGS  
+    log(f" - updated net rating's connected time since startup:   {self.connected_time_since_startup}")
+    log(f" - updated net rating's connected time since reconnect: {self.connected_time_since_reconnect}")
 
   def register_fail(self):
     self.num_fails += 1
     log(f" - updated net rating's num fails: {self.num_fails}")
+    self.connected_time_since_reconnect = 0
 
   def get_score(self):
-    if self.connected_time == 0:
+    connected_time = self.connected_time_since_startup 
+    if connected_time == 0:
       score = self.num_fails * -1 
     elif self.num_fails > 0:
-      score = self.connected_time / self.num_fails
+      score = connected_time / self.num_fails
     else:
-      score = self.connected_time #shouldn't ever happen
+      score = connected_time #shouldn't ever happen
       
-    log(f" - strength:       {self.strength}")
-    log(f" - connected time: {self.connected_time}")
-    log(f" - num fails:      {self.num_fails}")
-    log(f" - score:          {score}")
+    log(f" - strength:                         {self.strength}")
+    log(f" - connected time (since startup):   {seconds_to_hours(self.connected_time_since_startup)}")
+    log(f" - connected time (since reconnect): {seconds_to_hours(self.connected_time_since_reconnect)}")
+    log(f" - num fails:                        {self.num_fails}")
+    log(f" - score:                            {score}")
 
     return score
   
@@ -313,10 +348,36 @@ class reconnecter:
         log("error - just reconnected but not online")
 
       self.previously_online = False
+
+    return reconnecter_result(connected=self.am_i_on_wifi(), online=self.am_i_online(), current_net_id=self.current_net_id, net_ratings=self.net_ratings.net_ratings)
   
 
+def update_console(result):
+  clear()
+  print(f"Last update: {result.datetime.strftime('%d/%m/%Y, %H:%M:%S')}")         
+  print(f"Connected: {str(result.connected)}, Online: {str(result.online)}")
+  print(f"- Current Network: {result.current_net_id}")
+  if result.current_net_id in result.net_ratings.keys():
+    net_rating = result.net_ratings[result.current_net_id]
+    print(f"  - Network Strength: {net_rating.strength} (on last reconnect)")
+    print(f"  - connected time (since startup):   {seconds_to_hours(net_rating.connected_time_since_startup)}")
+    print(f"  - connected time (since reconnect): {seconds_to_hours(net_rating.connected_time_since_reconnect)}")
+    print(f"  - Network Fails: {net_rating.num_fails}")
+    
+
+  else:
+    print(f"ERROR - no network rating with net id '{result.current_net_id}'")
+
+  print('\n')
+  print("LATEST LOG: ")
+  print("")
+  for msg in retained_log_messages.messages:
+    print(msg)
+
 #main code:
-reconnecter = reconnecter()
-while True:
-  reconnecter.public_loop()
-  sleep(3)
+if __name__ == '__main__':
+  reconnecter = reconnecter()
+  while True:
+    result = reconnecter.public_loop()
+    update_console(result)
+    sleep(SECONDS_BETWEEN_PINGS)
