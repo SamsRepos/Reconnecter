@@ -11,6 +11,12 @@ def seconds_to_hours(secs):
     hh, mm = divmod(mm, 60)
     return "%d:%02d:%02d" % (hh, mm, ss)
 
+def datetime_formatted(dt):
+  return dt.strftime('%H:%M:%S %d/%m/%Y')
+#  return dt.strftime('%d/%m/%Y, %H:%M:%S')
+
+def timeonly_formatted(dt):
+  return dt.strftime('%H:%M:%S')
 
 class reconnecter_result:
     def __init__(self, connected, online, current_net_id, net_ratings):
@@ -41,7 +47,7 @@ log_file_path = log_file_path.replace(" ", "-")
 log_file_path = log_file_path.replace(":", "-")
 
 SECONDS_BETWEEN_PINGS = 3
-MAX_RETAINED_MESSAGES = 15
+MAX_RETAINED_MESSAGES = 20
 
 class retained_log_messages:
   
@@ -88,6 +94,7 @@ class net_rating:
     self.connected_time_since_startup = 0
     self.connected_time_since_reconnect = 0
     self.num_fails = 0
+    self.fail_timestamps = []
     log(f" - new net rating, initial strength: {strength}")
 
   def update_strength(self, strength):
@@ -104,6 +111,7 @@ class net_rating:
     self.num_fails += 1
     log(f" - updated net rating's num fails: {self.num_fails}")
     self.connected_time_since_reconnect = 0
+    self.fail_timestamps.append(datetime.now())
 
   def get_score(self):
     connected_time = self.connected_time_since_startup 
@@ -137,7 +145,7 @@ class net_ratings_mgr:
     interfaces_res = run_proc("netsh wlan show interfaces")
     interfaces_res = parse_cmd_output(interfaces_res)
 
-    signal_strs = list()
+    signal_strs = []
 
     for line in interfaces_res:
       if "Signal" in line:
@@ -216,7 +224,7 @@ class reconnecter:
   def __init__(self):
     self.current_net_id = ""
     self.net_ratings = net_ratings_mgr()
-    self.net_profiles = list()
+    self.net_profiles = []
     
     #getting network profiles on this computer:
     profiles_res = run_proc("netsh wlan show profile")
@@ -280,7 +288,7 @@ class reconnecter:
     interfaces_res = run_proc("netsh wlan show interfaces")
     interfaces_res = parse_cmd_output(interfaces_res)
 
-    net_ids = list()
+    net_ids = []
     
     for line in interfaces_res:
       if "SSID" in line:
@@ -295,7 +303,7 @@ class reconnecter:
   def reconnect(self):
     nets_res = run_proc("netsh wlan show networks")
     nets_res = parse_cmd_output(nets_res)
-    net_ids = list()
+    net_ids = []
 
     for line in nets_res:
       if "SSID" in line:
@@ -354,7 +362,8 @@ class reconnecter:
 
 def update_console(result):
   clear()
-  print(f"Last update: {result.datetime.strftime('%d/%m/%Y, %H:%M:%S')}")         
+  print(f"Time between pings: {SECONDS_BETWEEN_PINGS} seconds")
+  print(f"Last update: {datetime_formatted(result.datetime)}")         
   print(f"Connected: {str(result.connected)}, Online: {str(result.online)}")
   print(f"- Current Network: {result.current_net_id}")
   if result.current_net_id in result.net_ratings.keys():
@@ -363,16 +372,20 @@ def update_console(result):
     print(f"  - connected time (since startup):   {seconds_to_hours(net_rating.connected_time_since_startup)}")
     print(f"  - connected time (since reconnect): {seconds_to_hours(net_rating.connected_time_since_reconnect)}")
     print(f"  - Network Fails: {net_rating.num_fails}")
-    
+    for fail_timestamp in reversed(net_rating.fail_timestamps):
+      delta = seconds_to_hours((datetime.now() - fail_timestamp).total_seconds())
+      print(f"    - {delta} ago, at {datetime_formatted(fail_timestamp)}")
+
 
   else:
     print(f"ERROR - no network rating with net id '{result.current_net_id}'")
 
-  print('\n')
-  print("LATEST LOG: ")
-  print("")
-  for msg in retained_log_messages.messages:
-    print(msg)
+  if VERBOSE:
+    print('\n')
+    print("LATEST LOG: ")
+    print("")
+    for msg in retained_log_messages.messages:
+      print(msg)
 
 #main code:
 if __name__ == '__main__':
