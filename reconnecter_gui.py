@@ -329,7 +329,7 @@ class reconnecter:
 
       self.previously_online = False
 
-    return reconnecter_result(connected=self.am_i_on_wifi(), online=self.am_i_online())
+    return reconnecter_result(connected=self.am_i_on_wifi(), online=self.am_i_online(), current_net_id=self.current_net_id)
   
 
 
@@ -341,18 +341,23 @@ class MainFrame(wx.Frame):
 
   def __init__(self, parent):
     wx.Frame.__init__(self, parent, title="Reconnecter")
+   
+    text_size = wx.Size(36, 20)
+
 
     self.panel = wx.Panel(self)
-    self.status_label = wx.StaticText(self.panel)
-    self.connected_label = wx.StaticText(self.panel)
-    self.online_label = wx.StaticText(self.panel)
+    self.status_label = wx.StaticText(self.panel, size=text_size)
+    self.connected_label = wx.StaticText(self.panel, size=text_size)
+    self.online_label = wx.StaticText(self.panel, size=text_size)
+    self.current_net_id_label = wx.StaticText(self.panel, size=text_size)
     self.start_btn = wx.Button(self.panel, label="start")
 
     sizer = wx.BoxSizer(wx.VERTICAL)
     sizer.Add(self.status_label)
     sizer.Add(self.connected_label)
     sizer.Add(self.online_label)
-
+    sizer.Add(self.current_net_id_label)
+    
     button_sizer = wx.BoxSizer(wx.HORIZONTAL)
     button_sizer.Add(self.start_btn)
     sizer.Add(button_sizer)
@@ -373,9 +378,10 @@ class MainFrame(wx.Frame):
     r = reconnecter()    
     while True:
       result = r.public_loop()
-      wx.CallAfter(self.status_label.SetLabelText,    f"Last update: {str(result.datetime)}")
-      wx.CallAfter(self.connected_label.SetLabelText, f"Connected: {str(result.connected)}")
-      wx.CallAfter(self.online_label.SetLabelText,    f"Online: {str(result.online)}")
+      wx.CallAfter(self.status_label.SetLabelText,         f"Last update: {result.datetime.strftime('%d/%m/%Y, %H:%M:%S')}")
+      wx.CallAfter(self.connected_label.SetLabelText,      f"Connected: {str(result.connected)}")
+      wx.CallAfter(self.online_label.SetLabelText,         f"Online: {str(result.online)}")
+      wx.CallAfter(self.current_net_id_label.SetLabelText, f"Current Network: {result.current_net_id}")
       sleep(3)
 
 if __name__ == '__main__':
