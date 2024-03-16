@@ -359,6 +359,7 @@ class reconnecter:
 
     return reconnecter_result(connected=self.am_i_on_wifi(), online=self.am_i_online(), current_net_id=self.current_net_id, net_ratings=self.net_ratings.net_ratings)
   
+MAX_FAIL_DETAILS = 20
 
 def update_console(result):
   clear()
@@ -372,9 +373,13 @@ def update_console(result):
     print(f"  - connected time (since startup):   {seconds_to_hours(net_rating.connected_time_since_startup)}")
     print(f"  - connected time (since reconnect): {seconds_to_hours(net_rating.connected_time_since_reconnect)}")
     print(f"  - Network Fails: {net_rating.num_fails}")
+    i = 0
     for fail_timestamp in reversed(net_rating.fail_timestamps):
       delta = seconds_to_hours((datetime.now() - fail_timestamp).total_seconds())
       print(f"    - {delta} ago, at {datetime_formatted(fail_timestamp)}")
+      i += 1
+      if i >= MAX_FAIL_DETAILS:
+        break
 
 
   else:
