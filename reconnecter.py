@@ -5,22 +5,26 @@ import winsound
 from sys import argv
 
 from utils import *
-from logger import log
+from logger import logger
 from net_ratings import net_ratings_mgr
 
 SECONDS_BETWEEN_PINGS = 3
 
-AUDIBLE = False
 EVPN    = False
+VERBOSE = False
+AUDIBLE = False
 
 if len(argv) > 0:
   for i in range(len(argv)):
     match argv[i]:
-      case("-a"):
-        AUDIBLE = True
       case("-evpn"):
         EVPN = True
+      case("-v"):
+        VERBOSE = True
+      case("-a"):
+        AUDIBLE = True
 
+logger = logger(VERBOSE)
 
 class reconnecter_result:
     def __init__(self, connected, online, current_net_id, net_ratings):
@@ -34,7 +38,7 @@ class reconnecter_result:
 class reconnecter:
   def __init__(self):
     self.current_net_id = ""
-    self.net_ratings = net_ratings_mgr(seconds_between_pings=SECONDS_BETWEEN_PINGS)
+    self.net_ratings = net_ratings_mgr(seconds_between_pings=SECONDS_BETWEEN_PINGS, logger=logger)
     self.net_profiles = []
     
     #getting network profiles on this computer:
@@ -47,23 +51,23 @@ class reconnecter:
         profile = netsh_info_to_val(line)
         self.net_profiles.append(profile)
     
-    log(f"network profiles found: {self.net_profiles}")
+    logger.log(f"network profiles found: {self.net_profiles}")
 
     
     #what is current network connection on startup?:
     if self.am_i_on_wifi():
       self.update_current_net_id()
-      log(f"on startup, connected to: {self.current_net_id}")
+      logger.log(f"on startup, connected to: {self.current_net_id}")
       self.net_ratings.update_strength(self.current_net_id)
     else:
-      log("not connected to a network on startup")
+      logger.log("not connected to a network on startup")
 
     if self.am_i_online():
       self.previously_online = True
-      log("online on startup")
+      logger.log("online on startup")
     else:
       self.previously_online = False
-      log("not online on startup")
+      logger.log("not online on startup")
       
   #bool
   def am_i_online(self):
@@ -72,7 +76,7 @@ class reconnecter:
     parsed_2 = parsed_1.split("\\")[0]
     p_res = parsed_2.strip()
 
-    log(p_res)
+    logger.log(p_res)
 
     if p_res == "online":
       return True
@@ -123,13 +127,13 @@ class reconnecter:
 
     valid_net_ids = [id for id in net_ids if id in self.net_profiles]
 
-    log(f"valid network ids: {valid_net_ids}")
+    logger.log(f"valid network ids: {valid_net_ids}")
 
     best_net_id = self.net_ratings.choose_best(valid_net_ids)
-    log(f"attempting to connect to {best_net_id}...")
+    logger.log(f"attempting to connect to {best_net_id}...")
     connect_cmd = f'netsh wlan connect ssid="{best_net_id}" name="{best_net_id}"'
     connect_res = run_proc(connect_cmd)
-    log(connect_res)
+    logger.log(connect_res)
 
     return best_net_id
 
@@ -161,10 +165,10 @@ class reconnecter:
       if self.am_i_on_wifi():
         self.net_ratings.update_strength(self.current_net_id)
       else:
-        log("error - just reconnected but not on wifi")
+        logger.log("error - just reconnected but not on wifi")
 
       if not self.am_i_online():
-        log("error - just reconnected but not online")
+        logger.log("error - just reconnected but not online")
 
       self.previously_online = False
 
@@ -200,5 +204,6 @@ if __name__ == '__main__':
   reconnecter = reconnecter()
   while True:
     result = reconnecter.public_loop()
-    update_console(result)
+    if not VERBOSE:
+      update_console(result)
     sleep(SECONDS_BETWEEN_PINGS)

@@ -2,6 +2,8 @@ from datetime import datetime
 from subprocess import Popen, PIPE
 import os
 
+import ctypes, sys
+
 def seconds_to_hours(secs):
     mm, ss = divmod(secs, 60)
     hh, mm = divmod(mm, 60)
@@ -27,3 +29,26 @@ def netsh_info_to_val(msg):
   return msg.split(":")[1].strip()
 
 clear = lambda: os.system('cls')
+
+class cwd_stack:
+  def __init__(self):
+    self.list = []
+    self.push(os.getcwd())
+
+  def push(self, path):
+    self.list.append(path)
+    os.chdir(path)
+
+  def pop(self):
+    self.list.pop()
+    os.chdir(self.list[-1])
+
+
+
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+

@@ -1,28 +1,29 @@
-from logger import log
+from logger import logger
 from utils import *
 
 class net_rating:
-  def __init__(self, strength):
+  def __init__(self, strength, logger):
     self.strength = strength
+    self.logger = logger
     self.connected_time_since_startup = 0
     self.connected_time_since_reconnect = 0
     self.num_fails = 0
     self.fail_timestamps = []
-    log(f" - new net rating, initial strength: {strength}")
+    self.logger.log(f" - new net rating, initial strength: {strength}")
 
   def update_strength(self, strength):
     self.strength = strength
-    log(f" - updating net rating's strength: {strength}")
+    self.logger.log(f" - updating net rating's strength: {strength}")
 
   def register_connected_time(self, seconds_between_pings):
     self.connected_time_since_startup += seconds_between_pings
     self.connected_time_since_reconnect += seconds_between_pings  
-    log(f" - updated net rating's connected time since startup:   {self.connected_time_since_startup}")
-    log(f" - updated net rating's connected time since reconnect: {self.connected_time_since_reconnect}")
+    self.logger.log(f" - updated net rating's connected time since startup:   {self.connected_time_since_startup}")
+    self.logger.log(f" - updated net rating's connected time since reconnect: {self.connected_time_since_reconnect}")
 
   def register_fail(self):
     self.num_fails += 1
-    log(f" - updated net rating's num fails: {self.num_fails}")
+    self.logger.log(f" - updated net rating's num fails: {self.num_fails}")
     self.connected_time_since_reconnect = 0
     self.fail_timestamps.append(datetime.now())
 
@@ -35,11 +36,11 @@ class net_rating:
     else:
       score = connected_time #shouldn't ever happen
       
-    log(f" - strength:                         {self.strength}")
-    log(f" - connected time (since startup):   {seconds_to_hours(self.connected_time_since_startup)}")
-    log(f" - connected time (since reconnect): {seconds_to_hours(self.connected_time_since_reconnect)}")
-    log(f" - num fails:                        {self.num_fails}")
-    log(f" - score:                            {score}")
+    self.logger.log(f" - strength:                         {self.strength}")
+    self.logger.log(f" - connected time (since startup):   {seconds_to_hours(self.connected_time_since_startup)}")
+    self.logger.log(f" - connected time (since reconnect): {seconds_to_hours(self.connected_time_since_reconnect)}")
+    self.logger.log(f" - num fails:                        {self.num_fails}")
+    self.logger.log(f" - score:                            {score}")
 
     return score
   
@@ -51,8 +52,9 @@ class net_rating:
 
 # returns strength int
 class net_ratings_mgr:
-  def __init__(self, seconds_between_pings):
+  def __init__(self, seconds_between_pings, logger):
     self.seconds_between_pings = seconds_between_pings
+    self.logger = logger
     self.net_ratings = { }
 
   def current_strength(self):
@@ -71,43 +73,43 @@ class net_ratings_mgr:
       strength = int(strength)
       return strength
     elif len(signal_strs) == 0:
-      log("error - tried to find signal strength when not connected")
-      log("  result of show interfaces cmd:") 
+      self.logger.log("error - tried to find signal strength when not connected")
+      self.logger.log("  result of show interfaces cmd:") 
       for line in interfaces_res:
-        log(line)
+        self.logger.log(line)
       return -1
     else:
-      log("error - multiple signal strength values found")
-      log("  result of show interfaces cmd:") 
+      self.logger.log("error - multiple signal strength values found")
+      self.logger.log("  result of show interfaces cmd:") 
       for line in interfaces_res:
-        log(line)
+        self.logger.log(line)
       return -1
 
   def update_strength(self, net_id):
     if net_id in self.net_ratings:
-      log(f"updating net rating for {net_id}")
+      self.logger.log(f"updating net rating for {net_id}")
       self.net_ratings[net_id].update_strength(self.current_strength())
     else:
-      log(f"adding net rating for {net_id}")
-      self.net_ratings.update({net_id : net_rating(self.current_strength())})
+      self.logger.log(f"adding net rating for {net_id}")
+      self.net_ratings.update({net_id : net_rating(self.current_strength(), self.logger)})
 
   def register_connected_time(self, net_id):
     if net_id in self.net_ratings:
-      log(f"registering connected time in net rating for {net_id}")
+      self.logger.log(f"registering connected time in net rating for {net_id}")
       self.net_ratings[net_id].register_connected_time(self.seconds_between_pings)
     else:
-      log(f"adding net rating for {net_id} to register connected time")
-      log("  error - net rating should already exist before registering connected time")
-      self.net_ratings.update({net_id : net_rating(self.current_strength())})
+      self.logger.log(f"adding net rating for {net_id} to register connected time")
+      self.logger.log("  error - net rating should already exist before registering connected time")
+      self.net_ratings.update({net_id : net_rating(self.current_strength(), self.logger)})
       self.net_ratings[net_id].register_connected_time(self.seconds_between_pings)
       
   def register_fail(self, net_id):
     if net_id in self.net_ratings:
-      log(f"registering fail in net rating for {net_id}")
+      self.logger.log(f"registering fail in net rating for {net_id}")
       self.net_ratings[net_id].register_fail()
     else:
-      log(f"adding net rating for {net_id} to register fail")
-      log("  error - net rating should already exist before registering a fail")
+      self.logger.log(f"adding net rating for {net_id} to register fail")
+      self.logger.log("  error - net rating should already exist before registering a fail")
       self.net_ratings.update({net_id : net_rating(self.current_strength())})
       self.net_ratings[net_id].register_fail()
   
@@ -123,7 +125,7 @@ class net_ratings_mgr:
     best_score = None
     for net_id in valid_net_ids:
       if net_id in self.net_ratings:
-        log(f"getting score for net rating: {net_id}")
+        self.logger.log(f"getting score for net rating: {net_id}")
         this_score = self.net_ratings[net_id].get_score()
         if (best_net_id == None) or (this_score > best_score):
           best_net_id = net_id
