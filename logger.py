@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from utils import datetime_formatted
 
 if not os.path.exists('./log'):
   os.mkdir('log')
@@ -17,7 +18,7 @@ class logger:
 
   def log(self, msg):
     with open(self.log_file_path, "a") as log_f:
-      now_str = str(datetime.now())
+      now_str = datetime_formatted(datetime.now())
       log_str = f"{now_str}: {msg}"
       log_f.write(log_str)
       log_f.write('\n\n')
