@@ -1,14 +1,18 @@
-from logger import logger
+from logger import Logger
 from utils import *
 
-class net_rating:
+class FailStamp:
+  def __init__(self, net_id):
+    self.timestamp = datetime.now()
+    self.network = net_id
+
+class NetRating:
   def __init__(self, strength, logger):
     self.strength = strength
     self.logger = logger
     self.connected_time_since_startup = 0
     self.connected_time_since_reconnect = 0
     self.num_fails = 0
-    self.fail_timestamps = []
     self.logger.log(f" - new net rating, initial strength: {strength}")
 
   def update_strength(self, strength):
@@ -25,7 +29,6 @@ class net_rating:
     self.num_fails += 1
     self.logger.log(f" - updated net rating's num fails: {self.num_fails}")
     self.connected_time_since_reconnect = 0
-    self.fail_timestamps.append(datetime.now())
 
   def get_score(self):
     connected_time = self.connected_time_since_startup 
@@ -51,11 +54,12 @@ class net_rating:
     
 
 # returns strength int
-class net_ratings_mgr:
+class NetRatingsMgr:
   def __init__(self, seconds_between_pings, logger):
     self.seconds_between_pings = seconds_between_pings
     self.logger = logger
-    self.net_ratings = { }
+    self.net_ratings = {}
+    self.fail_stamps = []
 
   def current_strength(self):
     interfaces_res = run_proc("netsh wlan show interfaces")
@@ -91,7 +95,7 @@ class net_ratings_mgr:
       self.net_ratings[net_id].update_strength(self.current_strength())
     else:
       self.logger.log(f"adding net rating for {net_id}")
-      self.net_ratings.update({net_id : net_rating(self.current_strength(), self.logger)})
+      self.net_ratings.update({net_id : NetRating(self.current_strength(), self.logger)})
 
   def register_connected_time(self, net_id):
     if net_id in self.net_ratings:
@@ -100,7 +104,7 @@ class net_ratings_mgr:
     else:
       self.logger.log(f"adding net rating for {net_id} to register connected time")
       self.logger.log("  error - net rating should already exist before registering connected time")
-      self.net_ratings.update({net_id : net_rating(self.current_strength(), self.logger)})
+      self.net_ratings.update({net_id : NetRating(self.current_strength(), self.logger)})
       self.net_ratings[net_id].register_connected_time(self.seconds_between_pings)
       
   def register_fail(self, net_id):
@@ -110,8 +114,10 @@ class net_ratings_mgr:
     else:
       self.logger.log(f"adding net rating for {net_id} to register fail")
       self.logger.log("  error - net rating should already exist before registering a fail")
-      self.net_ratings.update({net_id : net_rating(self.current_strength())})
+      self.net_ratings.update({net_id : NetRating(self.current_strength())})
       self.net_ratings[net_id].register_fail()
+      
+    self.fail_stamps.append(FailStamp(net_id))
   
   def choose_best(self, valid_net_ids):
 

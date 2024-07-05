@@ -8,7 +8,7 @@ if not os.path.exists('./log'):
 RELATIVE_LOG_FILE_PATH = "./log/"
 
 
-class logger:
+class Logger:
   def __init__(self, verbose):
     self.verbose = verbose
 

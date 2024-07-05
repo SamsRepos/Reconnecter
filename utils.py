@@ -30,7 +30,7 @@ def netsh_info_to_val(msg):
 
 clear = lambda: os.system('cls')
 
-class cwd_stack:
+class CwdStack:
   def __init__(self):
     self.list = []
     self.push(os.getcwd())
